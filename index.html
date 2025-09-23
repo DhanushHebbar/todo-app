@@ -15,9 +15,9 @@
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
       import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
       import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-      window.firebase = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, setLogLevel };
+      window.firebase = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, setLogLevel, runTransaction };
     </script>
     <style>
         body {
@@ -225,14 +225,16 @@
                         let path = isPublic
                             ? `/artifacts/${appId}/public/data/todos`
                             : `/artifacts/${appId}/users/${userId}/todos`;
-                        const { collection, query, where, getDocs, deleteDoc, doc } = window.firebase;
+                        const { collection, query, where, getDocs, doc, deleteDoc } = window.firebase;
                         const completedQuery = query(collection(db, path), where("completed", "==", true));
                         const completedSnapshot = await getDocs(completedQuery);
-                        const batch = db.runTransaction(async (transaction) => {
-                            completedSnapshot.forEach((doc) => {
-                                transaction.delete(doc.ref);
+                        
+                        if (completedSnapshot.docs.length > 0) {
+                            completedSnapshot.forEach(async (d) => {
+                                await deleteDoc(doc(db, path, d.id));
                             });
-                        });
+                        }
+
                     } catch (e) {
                         console.error("Error clearing completed tasks: ", e);
                         showAlert("Error clearing completed tasks.");
