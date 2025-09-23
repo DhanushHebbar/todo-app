@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced React To-Do App</title>
+    <title>Super App Bundle</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load React and ReactDOM -->
@@ -11,14 +11,6 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Load Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Firebase Imports -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-      import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-      import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-      window.firebase = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, setLogLevel };
-    </script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -55,7 +47,6 @@
             transform: translateX(-50%);
             padding: 0.75rem 1.5rem;
             border-radius: 9999px;
-            background-color: #f87171;
             color: white;
             z-index: 2000;
             animation: fadeinout 2s forwards;
@@ -66,7 +57,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+<body class="bg-gray-100 text-gray-800 transition-colors duration-300">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -75,205 +66,76 @@
             const { useState, useEffect, useRef } = React;
             const { createRoot } = ReactDOM;
 
-            // Global variables provided by the environment
-            const __app_id = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
-            const __firebase_config = typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : null;
-            const __initial_auth_token = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
-            
-            // Firebase service variables
-            let db, auth;
-            
-            const stringToColor = (str) => {
-                let hash = 0;
-                for (let i = 0; i < str.length; i++) {
-                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                let color = '#';
-                for (let i = 0; i < 3; i++) {
-                    let value = (hash >> (i * 8)) & 0xFF;
-                    color += ('00' + value.toString(16)).substr(-2);
-                }
-                return color;
-            };
-
             const App = () => {
                 const [todos, setTodos] = useState([]);
                 const [currentPage, setCurrentPage] = useState('list');
-                const [theme, setTheme] = useState('light');
-                const [showConfetti, setShowConfetti] = useState(false);
+                const [theme, setTheme] = useState('default');
                 const confettiContainerRef = useRef(null);
-                const [authReady, setAuthReady] = useState(false);
-                const [userId, setUserId] = useState(null);
-                const [appId] = useState(__app_id);
-                const [isPublic, setIsPublic] = useState(false);
                 const [alertMessage, setAlertMessage] = useState(null);
-                const [firebaseEnabled, setFirebaseEnabled] = useState(false);
-
                 const [showConfirm, setShowConfirm] = useState(false);
                 const [todoToDelete, setTodoToDelete] = useState(null);
+                const [showMenu, setShowMenu] = useState(false);
 
                 const showAlert = (message) => {
                     setAlertMessage(message);
                     setTimeout(() => setAlertMessage(null), 3000);
                 };
 
-                // Firebase Initialization and Auth
+                // Theme handling
                 useEffect(() => {
-                    if (__firebase_config && window.firebase) {
-                        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, setLogLevel } = window.firebase;
-                        
-                        try {
-                            const config = JSON.parse(__firebase_config);
-                            const app = initializeApp(config);
-                            db = getFirestore(app);
-                            auth = getAuth(app);
-                            setFirebaseEnabled(true);
-                            setLogLevel('debug'); // for debugging
-                        
-                            onAuthStateChanged(auth, async (user) => {
-                                if (user) {
-                                    setUserId(user.uid);
-                                    setAuthReady(true);
-                                } else {
-                                    try {
-                                        if (__initial_auth_token) {
-                                            await signInWithCustomToken(auth, __initial_auth_token);
-                                        } else {
-                                            await signInAnonymously(auth);
-                                        }
-                                    } catch (error) {
-                                        console.error("Firebase auth error:", error);
-                                        setAuthReady(true); // Continue with a blank slate if auth fails
-                                    }
-                                }
-                            });
-                        } catch (error) {
-                            console.error("Firebase initialization failed:", error);
-                            setAuthReady(true);
-                        }
-                    } else {
-                        console.error("Firebase config is not available. Running in offline mode.");
-                        setAuthReady(true);
-                        setFirebaseEnabled(false);
-                        setUserId(crypto.randomUUID());
-                    }
+                    const themes = {
+                        'default': 'bg-gray-100 text-gray-800',
+                        'dark': 'bg-gray-900 text-gray-200',
+                        'grey': 'bg-zinc-700 text-gray-200'
+                    };
+                    document.documentElement.className = themes[theme];
+                }, [theme]);
+                
+                // Load todos from localStorage on initial load
+                useEffect(() => {
+                    const storedTodos = JSON.parse(localStorage.getItem('todos') || '[]');
+                    setTodos(storedTodos);
                 }, []);
                 
-                // Firestore Data Listener
+                // Update localStorage whenever todos change
                 useEffect(() => {
-                    if (authReady && userId && firebaseEnabled) {
-                        let listPath = isPublic 
-                            ? `/artifacts/${appId}/public/data/todos` 
-                            : `/artifacts/${appId}/users/${userId}/todos`;
+                    localStorage.setItem('todos', JSON.stringify(todos));
+                }, [todos]);
 
-                        const { collection, onSnapshot } = window.firebase;
-                        const unsubscribe = onSnapshot(collection(db, listPath), (snapshot) => {
-                            const newTodos = snapshot.docs.map(doc => ({
-                                id: doc.id,
-                                ...doc.data()
-                            }));
-                            setTodos(newTodos);
-                        }, (error) => {
-                            console.error("Error fetching tasks:", error);
-                            showAlert("Error fetching tasks. Check your permissions.");
-                        });
-
-                        return () => unsubscribe();
-                    } else if (!firebaseEnabled) {
-                        // In offline mode, manage data in-memory
-                        setTodos(JSON.parse(localStorage.getItem('offlineTodos')) || []);
-                    }
-                }, [authReady, userId, isPublic, appId, firebaseEnabled]);
-
-                const updateTodoInDb = async (todoId, newFields) => {
-                    if (!firebaseEnabled) {
-                        const updatedTodos = todos.map(t => t.id === todoId ? { ...t, ...newFields } : t);
-                        setTodos(updatedTodos);
-                        localStorage.setItem('offlineTodos', JSON.stringify(updatedTodos));
-                        return;
-                    }
-                    try {
-                        let path = isPublic
-                            ? `/artifacts/${appId}/public/data/todos/${todoId}`
-                            : `/artifacts/${appId}/users/${userId}/todos/${todoId}`;
-                        const { doc, setDoc } = window.firebase;
-                        await setDoc(doc(db, path), newFields, { merge: true });
-                    } catch (e) {
-                        console.error("Error updating document: ", e);
-                        showAlert("Error updating task.");
-                    }
+                const addTodo = (e, newTodo, newPriority, newDueDate) => {
+                    e.preventDefault();
+                    if (newTodo.trim() === '') return;
+                    const newTodoItem = {
+                        id: Date.now().toString(),
+                        text: newTodo.trim(),
+                        completed: false,
+                        priority: newPriority,
+                        dueDate: newDueDate,
+                        createdAt: Date.now()
+                    };
+                    setTodos(prevTodos => [...prevTodos, newTodoItem]);
+                    showAlert("Task added successfully!");
                 };
 
-                const addTodoInDb = async (newTodo) => {
-                    if (!firebaseEnabled) {
-                        const newId = Date.now().toString();
-                        const newTodos = [...todos, { ...newTodo, id: newId }];
-                        setTodos(newTodos);
-                        localStorage.setItem('offlineTodos', JSON.stringify(newTodos));
-                        return;
-                    }
-                    try {
-                        let path = isPublic
-                            ? `/artifacts/${appId}/public/data/todos`
-                            : `/artifacts/${appId}/users/${userId}/todos`;
-                        const { addDoc, collection } = window.firebase;
-                        await addDoc(collection(db, path), newTodo);
-                    } catch (e) {
-                        console.error("Error adding document: ", e);
-                        showAlert("Error adding task.");
-                    }
+                const updateTodo = (todoId, newFields) => {
+                    setTodos(prevTodos => prevTodos.map(todo => todo.id === todoId ? { ...todo, ...newFields } : todo));
                 };
 
-                const deleteTodoInDb = async (todoId) => {
-                    if (!firebaseEnabled) {
-                        const updatedTodos = todos.filter(t => t.id !== todoId);
-                        setTodos(updatedTodos);
-                        localStorage.setItem('offlineTodos', JSON.stringify(updatedTodos));
-                        return;
-                    }
-                    try {
-                        let path = isPublic
-                            ? `/artifacts/${appId}/public/data/todos/${todoId}`
-                            : `/artifacts/${appId}/users/${userId}/todos/${todoId}`;
-                        const { doc, deleteDoc } = window.firebase;
-                        await deleteDoc(doc(db, path));
-                    } catch (e) {
-                        console.error("Error removing document: ", e);
-                        showAlert("Error deleting task.");
-                    }
+                const deleteTodo = (todoId) => {
+                    setTodos(prevTodos => prevTodos.filter(todo => todo.id !== todoId));
+                    showAlert("Task deleted!");
                 };
                 
-                const clearCompletedInDb = async () => {
-                    if (!firebaseEnabled) {
-                        const updatedTodos = todos.filter(t => !t.completed);
-                        setTodos(updatedTodos);
-                        localStorage.setItem('offlineTodos', JSON.stringify(updatedTodos));
-                        return;
-                    }
-                    try {
-                        let path = isPublic
-                            ? `/artifacts/${appId}/public/data/todos`
-                            : `/artifacts/${appId}/users/${userId}/todos`;
-                        const { collection, query, where, getDocs, doc, deleteDoc } = window.firebase;
-                        const completedQuery = query(collection(db, path), where("completed", "==", true));
-                        const completedSnapshot = await getDocs(completedQuery);
-                        
-                        if (completedSnapshot.docs.length > 0) {
-                            completedSnapshot.forEach(async (d) => {
-                                await deleteDoc(doc(db, path, d.id));
-                            });
-                        }
-
-                    } catch (e) {
-                        console.error("Error clearing completed tasks: ", e);
-                        showAlert("Error clearing completed tasks.");
-                    }
+                const clearCompleted = () => {
+                    setTodos(prevTodos => prevTodos.filter(todo => !todo.completed));
+                    showAlert("Completed tasks cleared!");
                 };
 
                 const toggleTheme = () => {
-                    const newTheme = theme === 'light' ? 'dark' : 'light';
-                    setTheme(newTheme);
-                    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+                    const themes = ['default', 'dark', 'grey'];
+                    const currentIndex = themes.indexOf(theme);
+                    const nextIndex = (currentIndex + 1) % themes.length;
+                    setTheme(themes[nextIndex]);
                 };
 
                 const createConfetti = (count = 100) => {
@@ -302,7 +164,7 @@
                 };
 
                 const confirmDelete = () => {
-                    deleteTodoInDb(todoToDelete);
+                    deleteTodo(todoToDelete);
                     setShowConfirm(false);
                     setTodoToDelete(null);
                 };
@@ -312,62 +174,35 @@
                     setTodoToDelete(null);
                 };
 
-                if (!authReady || !userId) {
-                    return (
-                        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-                            <div className="text-center text-gray-700 dark:text-gray-300">
-                                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                                <p className="mt-4">Loading application...</p>
-                            </div>
-                        </div>
-                    );
-                }
-
                 return (
-                    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 p-4 sm:p-6 font-inter relative">
-                        {alertMessage && <div className="alert-message">{alertMessage}</div>}
+                    <div className="min-h-screen transition-colors duration-300 p-4 sm:p-6 font-inter relative">
+                        {alertMessage && <div className="alert-message bg-blue-500">{alertMessage}</div>}
                         <div ref={confettiContainerRef} className="confetti-container"></div>
-                        <div className="max-w-xl mx-auto bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl transition-colors duration-300">
-                            <header className="mb-6 flex justify-between items-center">
-                                <h1 className="text-4xl font-bold text-center">Task App</h1>
+                        <div className={`max-w-xl mx-auto p-6 sm:p-8 rounded-2xl shadow-xl transition-colors duration-300 ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : theme === 'grey' ? 'bg-zinc-800 text-gray-200' : 'bg-white text-gray-800'}`}>
+                            <header className="mb-6 flex justify-between items-center relative">
+                                <h1 className="text-4xl font-bold text-center">App Bundle</h1>
                                 <div className="flex space-x-2">
-                                    <button onClick={() => setCurrentPage('list')} className={`p-2 rounded-full ${currentPage === 'list' ? 'bg-blue-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} aria-label="View task list">
+                                    <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200" aria-label="Open menu" title="Open Menu">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
                                     </button>
-                                    <button onClick={() => setCurrentPage('dashboard')} className={`p-2 rounded-full ${currentPage === 'dashboard' ? 'bg-blue-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} aria-label="View dashboard">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5l5.25 5.25m5.25-5.25L21 9m-13.5 0l5.25 5.25m-5.25 5.25L21 15" /></svg>
-                                    </button>
-                                    <button onClick={() => setCurrentPage('history')} className={`p-2 rounded-full ${currentPage === 'history' ? 'bg-blue-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} aria-label="View history">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </button>
-                                    <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200" aria-label="Toggle theme">
-                                        {theme === 'light' ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0015 21a9.753 9.753 0 006.752-6.002z" /></svg>
-                                        ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.364l-1.591 1.591M21 12h-2.25m-.364 6.364l-1.591-1.591M12 18.75V21m-6.364-.364l1.591-1.591M3 12H5.25m.364-6.364l1.591 1.591M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                        )}
+                                    <button onClick={toggleTheme} className="p-2 rounded-full flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200" aria-label="Toggle theme" title="Toggle Theme">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.364l-1.591 1.591M21 12h-2.25m-.364 6.364l-1.591-1.591M12 18.75V21m-6.364-.364l1.591-1.591M3 12H5.25m.364-6.364l1.591 1.591M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </button>
                                 </div>
+                                {showMenu && (
+                                    <div className="absolute right-0 top-12 w-48 bg-white dark:bg-gray-700 rounded-lg shadow-xl z-20 transition-all duration-200">
+                                        <button onClick={() => { setCurrentPage('list'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors rounded-t-lg">To-Do App</button>
+                                        <button onClick={() => { setCurrentPage('drawing'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Drawing App</button>
+                                        <button onClick={() => { setCurrentPage('converter'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors rounded-b-lg">Unit Converter</button>
+                                    </div>
+                                )}
                             </header>
 
-                            <div className="mb-6 flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700">
-                                <div className="flex items-center space-x-2">
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white shadow-md" style={{ backgroundColor: stringToColor(userId) }}>U</div>
-                                    <div>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">User ID:</span>
-                                        <p className="font-mono text-xs overflow-hidden whitespace-nowrap overflow-ellipsis">{userId}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-semibold">List:</span>
-                                    <button onClick={() => setIsPublic(false)} className={`px-3 py-1 rounded-full text-xs font-semibold ${!isPublic ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>Private</button>
-                                    <button onClick={() => setIsPublic(true)} className={`px-3 py-1 rounded-full text-xs font-semibold ${isPublic ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>Public</button>
-                                </div>
-                            </div>
-                            
-                            {currentPage === 'list' && <TaskListPage todos={todos} createConfetti={createConfetti} addTodoInDb={addTodoInDb} updateTodoInDb={updateTodoInDb} clearCompletedInDb={clearCompletedInDb} handleDeleteClick={handleDeleteClick} />}
+                            {currentPage === 'list' && <TaskListPage todos={todos} createConfetti={createConfetti} addTodo={addTodo} updateTodo={updateTodo} clearCompleted={clearCompleted} handleDeleteClick={handleDeleteClick} setCurrentPage={setCurrentPage} />}
                             {currentPage === 'dashboard' && <DashboardPage todos={todos} />}
-                            {currentPage === 'history' && <HistoryPage todos={todos} updateHistory={updateTodoInDb} />}
+                            {currentPage === 'history' && <HistoryPage todos={todos} />}
+                            {currentPage === 'drawing' && <DrawingApp />}
+                            {currentPage === 'converter' && <ConverterApp />}
                             <ConfirmationModal showConfirm={showConfirm} cancelDelete={cancelDelete} confirmDelete={confirmDelete} />
                         </div>
                     </div>
@@ -379,9 +214,9 @@
                 if (!showConfirm) return null;
                 return (
                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl max-w-sm w-full text-center">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl max-w-sm w-full text-center text-gray-800 dark:text-gray-200">
                             <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
-                            <p className="text-gray-700 dark:text-gray-300 mb-6">
+                            <p className="mb-6 text-gray-700 dark:text-gray-300">
                                 Are you sure you want to delete this task?
                             </p>
                             <div className="flex justify-end space-x-4">
@@ -395,61 +230,61 @@
             
             // Dashboard Page Component
             const DashboardPage = ({ todos }) => {
-              const totalTasks = todos.length;
-              const completedTasks = todos.filter(todo => todo.completed).length;
-              const highPriority = todos.filter(todo => todo.priority === 'High').length;
-              const mediumPriority = todos.filter(todo => todo.priority === 'Medium').length;
-              const lowPriority = todos.filter(todo => todo.priority === 'Low').length;
-              
-              const completedPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-              const highPercentage = totalTasks > 0 ? (highPriority / totalTasks) * 100 : 0;
-              const mediumPercentage = totalTasks > 0 ? (mediumPriority / totalTasks) * 100 : 0;
-              const lowPercentage = totalTasks > 0 ? (lowPriority / totalTasks) * 100 : 0;
-              
-              return (
-                <div className="space-y-6">
-                  <h2 className="text-3xl font-bold text-center">Dashboard</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 shadow-sm text-center">
-                      <h3 className="text-xl font-semibold">Total Tasks</h3>
-                      <p className="text-3xl font-bold mt-2">{totalTasks}</p>
+                const totalTasks = todos.length;
+                const completedTasks = todos.filter(todo => todo.completed).length;
+                const highPriority = todos.filter(todo => todo.priority === 'High').length;
+                const mediumPriority = todos.filter(todo => todo.priority === 'Medium').length;
+                const lowPriority = todos.filter(todo => todo.priority === 'Low').length;
+                
+                const completedPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+                const highPercentage = totalTasks > 0 ? (highPriority / totalTasks) * 100 : 0;
+                const mediumPercentage = totalTasks > 0 ? (mediumPriority / totalTasks) * 100 : 0;
+                const lowPercentage = totalTasks > 0 ? (lowPriority / totalTasks) * 100 : 0;
+                
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-center">Dashboard</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
+                                <h3 className="text-sm sm:text-lg font-semibold">Total</h3>
+                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-green-200 dark:bg-green-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
+                                <h3 className="text-sm sm:text-lg font-semibold">Completed</h3>
+                                <p className="text-2xl sm:text-3xl font-bold mt-2">{completedTasks}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-yellow-200 dark:bg-yellow-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
+                                <h3 className="text-sm sm:text-lg font-semibold">Active</h3>
+                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-blue-200 dark:bg-blue-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
+                                <h3 className="text-sm sm:text-lg font-semibold">Incomplete</h3>
+                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
+                            </div>
+                        </div>
+                        <div className="p-6 rounded-xl bg-gray-100 dark:bg-gray-700 shadow-md text-gray-800 dark:text-gray-200">
+                            <h3 className="text-2xl font-bold mb-4 text-center">Priority Breakdown</h3>
+                            <div className="flex justify-around items-end h-48 py-4">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-12 rounded-t-lg bg-red-500 transition-all duration-300" style={{ height: `${highPercentage}%` }}></div>
+                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">High ({highPriority})</span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <div className="w-12 rounded-t-lg bg-yellow-500 transition-all duration-300" style={{ height: `${mediumPercentage}%` }}></div>
+                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">Medium ({mediumPriority})</span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <div className="w-12 rounded-t-lg bg-green-500 transition-all duration-300" style={{ height: `${lowPercentage}%` }}></div>
+                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">Low ({lowPriority})</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="p-4 rounded-xl bg-green-200 dark:bg-green-700 shadow-sm text-center">
-                      <h3 className="text-xl font-semibold">Completed</h3>
-                      <p className="text-3xl font-bold mt-2">{completedTasks}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-yellow-200 dark:bg-yellow-700 shadow-sm text-center">
-                      <h3 className="text-xl font-semibold">Active</h3>
-                      <p className="text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-blue-200 dark:bg-blue-700 shadow-sm text-center">
-                      <h3 className="text-xl font-semibold">Incomplete</h3>
-                      <p className="text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
-                    </div>
-                  </div>
-                  <div className="p-6 rounded-xl bg-gray-100 dark:bg-gray-700 shadow-md">
-                    <h3 className="text-2xl font-bold mb-4 text-center">Priority Breakdown</h3>
-                    <div className="h-48 flex items-end justify-around">
-                      <div className="flex flex-col items-center">
-                        <div className="w-12 rounded-t-lg bg-red-500 transition-all duration-300" style={{ height: `${highPercentage}%` }}></div>
-                        <span className="text-sm mt-2">High ({highPriority})</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <div className="w-12 rounded-t-lg bg-yellow-500 transition-all duration-300" style={{ height: `${mediumPercentage}%` }}></div>
-                        <span className="text-sm mt-2">Medium ({mediumPriority})</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <div className="w-12 rounded-t-lg bg-green-500 transition-all duration-300" style={{ height: `${lowPercentage}%` }}></div>
-                        <span className="text-sm mt-2">Low ({lowPriority})</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
+                );
             };
             
             // Task List Page Component
-            const TaskListPage = ({ todos, createConfetti, addTodoInDb, updateTodoInDb, clearCompletedInDb, handleDeleteClick }) => {
+            const TaskListPage = ({ todos, createConfetti, addTodo, updateTodo, clearCompleted, handleDeleteClick, setCurrentPage }) => {
                 const [newTodo, setNewTodo] = useState('');
                 const [newPriority, setNewPriority] = useState('Medium');
                 const [newDueDate, setNewDueDate] = useState('');
@@ -461,7 +296,6 @@
                 const [isSpeaking, setIsSpeaking] = useState(false);
                 const recognitionRef = useRef(null);
                 const timerRef = useRef(null);
-                const [draggedItem, setDraggedItem] = useState(null);
 
                 useEffect(() => {
                     if (isRunning) {
@@ -513,45 +347,7 @@
                     recognition.start();
                     recognitionRef.current = recognition;
                 };
-
-                const addTodo = (e) => {
-                    e.preventDefault();
-                    if (newTodo.trim() === '') return;
-                    const newTodoItem = {
-                        text: newTodo.trim(),
-                        completed: false,
-                        priority: newPriority,
-                        dueDate: newDueDate,
-                        createdAt: Date.now()
-                    };
-                    addTodoInDb(newTodoItem);
-                    setNewTodo('');
-                    setNewDueDate('');
-                };
-
-                const toggleTodo = (id, completed) => {
-                    updateTodoInDb(id, { completed: !completed });
-                    if (!completed) {
-                        createConfetti(100);
-                    }
-                };
-
-                const handleDragStart = (e, id) => {
-                    setDraggedItem(id);
-                };
-
-                const handleDragOver = (e) => {
-                    e.preventDefault();
-                };
-
-                const handleDrop = (e, dropId) => {
-                    e.preventDefault();
-                    // Firebase doesn't support reordering by simply moving,
-                    // a more complex implementation would be needed.
-                    // For now, we will simply not allow reordering of Firestore docs.
-                    setDraggedItem(null);
-                };
-
+                
                 const filteredTodos = todos
                     .filter(todo => {
                         if (filter === 'Active') return !todo.completed;
@@ -611,27 +407,42 @@
                     reader.onload = (event) => {
                         try {
                             const importedTodos = JSON.parse(event.target.result);
-                            // This would require a more complex import logic for Firebase
-                            console.log("Imported data:", importedTodos);
-                            alert("Import functionality is not fully implemented for Firebase.");
+                            setTodos(importedTodos);
+                            showAlert("Tasks imported successfully!");
                         } catch (error) {
-                            alert("Invalid JSON file.");
+                            showAlert("Invalid JSON file.");
                         }
                     };
                     reader.readAsText(file);
                 };
+                
+                const handleAdd = (e) => {
+                    addTodo(e, newTodo, newPriority, newDueDate);
+                    setNewTodo('');
+                    setNewDueDate('');
+                }
 
                 return (
                     <>
+                        <div className="flex justify-center sm:justify-between items-center mb-6 space-x-2">
+                            <button onClick={() => setCurrentPage('dashboard')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View Dashboard">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5l5.25 5.25m5.25-5.25L21 9m-13.5 0l5.25 5.25m-5.25 5.25L21 15" /></svg>
+                                <span className="hidden sm:inline">Dashboard</span>
+                            </button>
+                            <button onClick={() => setCurrentPage('history')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View History">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span className="hidden sm:inline">History</span>
+                            </button>
+                        </div>
                         <div className="flex justify-between items-center mb-6">
-                            <button onClick={handleExport} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                            <button onClick={handleExport} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Export Tasks">
                                 <svg xmlns="http://www.w3.org/2d00/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75L15 12m0 0l-3 2.25M15 12l-3-2.25M12 9.75V21m-2.75 3h5.5c1.242 0 2.25-1.008 2.25-2.25v-5.5a2.25 2.25 0 00-2.25-2.25h-5.5a2.25 2.25 0 00-2.25 2.25v5.5c0 1.242 1.008 2.25 2.25 2.25zM12 9.75V21" /></svg>
                             </button>
-                            <label htmlFor="file-import" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
+                            <label htmlFor="file-import" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer" title="Import Tasks">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 14.25L9.75 12m0 0l-2.25 2.25m2.25-2.25v10.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 <input id="file-import" type="file" className="hidden" onChange={handleImport} accept=".json" />
                             </label>
-                            <button onClick={handlePrint} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                            <button onClick={handlePrint} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Print List">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18V21a3 3 0 003 3h6a3 3 0 003-3v-3M3 9v-3h18v3M9 3H7M15 3h-2" /></svg>
                             </button>
                         </div>
@@ -639,16 +450,16 @@
                         <div className="text-center mb-6">
                             <div className="text-4xl font-mono">{formatTime(pomodoroTime)}</div>
                             <div className="mt-2 space-x-2">
-                                <button onClick={isRunning ? stopPomodoro : startPomodoro} className="px-4 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors">{isRunning ? 'Pause' : 'Start'}</button>
-                                <button onClick={resetPomodoro} className="px-4 py-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors">Reset</button>
+                                <button onClick={isRunning ? stopPomodoro : startPomodoro} className="px-4 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={isRunning ? 'Pause Timer' : 'Start Timer'}>{isRunning ? 'Pause' : 'Start'}</button>
+                                <button onClick={resetPomodoro} className="px-4 py-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors" title="Reset Timer">Reset</button>
                             </div>
                         </div>
 
-                        <form onSubmit={addTodo} className="space-y-4 mb-6">
+                        <form onSubmit={handleAdd} className="space-y-4 mb-6">
                             <div className="flex items-center space-x-2">
                                 <input
                                     type="text"
-                                    className="flex-grow p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+                                    className="flex-grow p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200"
                                     placeholder="Add a new task..."
                                     value={newTodo}
                                     onChange={(e) => setNewTodo(e.target.value)}
@@ -656,34 +467,35 @@
                                 <button
                                     type="button"
                                     onClick={startVoiceInput}
-                                    className={`p-3 rounded-full ${isSpeaking ? 'bg-red-500 animate-pulse' : 'bg-gray-200'} text-gray-800 dark:text-gray-200 transition-colors`}
+                                    className={`p-3 rounded-full ${isSpeaking ? 'bg-red-500 animate-pulse' : 'bg-gray-200 dark:bg-gray-700'} text-gray-800 dark:text-gray-200 transition-colors`}
                                     aria-label="Voice input"
+                                    title="Add Task via Voice"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5a6 6 0 00-6-6v1.5a4.5 4.5 0 014.5 4.5v1.5a4.5 4.5 0 01-4.5 4.5zM12 18.75v3.75m6-3.75c0-1.564-.4-3.033-1.083-4.341m-4.502 4.341c-.683-.243-1.391-.359-2.098-.359s-1.415.116-2.098.359m-4.502-4.341c-.683.243-1.391.359-2.098.359s-1.415-.116-2.098-.359" /></svg>
                                 </button>
-                                <button type="submit" className="p-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-200">
+                                <button type="submit" className="p-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-200" title="Add Task">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                 </button>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+                                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200">
                                     <option value="High">High Priority</option>
                                     <option value="Medium">Medium Priority</option>
                                     <option value="Low">Low Priority</option>
                                 </select>
-                                <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200" />
+                                <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200" />
                             </div>
                         </form>
 
                         <div className="flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0 sm:space-x-4 mb-6">
                             <div className="flex space-x-2">
                                 {['All', 'Active', 'Completed'].map(f => (
-                                    <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-full font-semibold transition-colors duration-200 ${filter === f ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-800'}`}>{f}</button>
+                                    <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-full font-semibold transition-colors duration-200 ${filter === f ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-800'}`} title={`Filter by ${f}`}>{f}</button>
                                 ))}
                             </div>
                             <div className="flex items-center space-x-2">
                                 <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Sort By:</span>
-                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200">
                                     <option value="dueDate">Due Date</option>
                                     <option value="priority">Priority</option>
                                     <option value="creationDate">Creation Date</option>
@@ -691,14 +503,13 @@
                             </div>
                         </div>
 
-                        <input type="text" className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 mb-6" placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <input type="text" className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 mb-6 text-gray-800 dark:text-gray-200" placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         
                         <ul className="space-y-4">
                             {todos.length === 0 ? (<p className="text-center text-gray-500 italic">No tasks yet. Add one above!</p>) : (
                                 filteredTodos.length === 0 ? (<p className="text-center text-gray-500 italic">No tasks match your criteria.</p>) : (
                                     filteredTodos.map(todo => (
-                                        <li key={todo.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md cursor-grab"
-                                            draggable onDragStart={(e) => handleDragStart(e, todo.id)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, todo.id)}>
+                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-50'}`}>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex-grow flex flex-col space-y-1">
                                                     <div className={`text-lg font-medium break-words transition-colors ${todo.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{todo.text}</div>
@@ -708,8 +519,11 @@
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2 mt-4 sm:mt-0 sm:ml-4">
-                                                    <button onClick={() => toggleTodo(todo.id, todo.completed)} className="p-2 text-green-500 rounded-full hover:bg-green-100 dark:hover:bg-green-800 transition-colors duration-200" aria-label="Mark as complete"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg></button>
-                                                    <button onClick={() => handleDeleteClick(todo.id)} className="p-2 text-red-500 rounded-full hover:bg-red-100 dark:hover:bg-red-800 transition-colors duration-200" aria-label="Delete task"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.13h-4.633a2.25 2.25 0 01-2.244-2.13L5.59 6.75m1.588-.354c.24-.047.48-.096.72-.146m-.72.146a.75.75 0 01-.194-.282m1.077-.282a.75.75 0 01.194.282m-1.077-.282a.75.75 0 00-1.096.398l-1.636 4.757m.657-4.757a.75.75 0 00-1.096-.398m-1.636-4.757a.75.75 0 00-.547-.197" /></svg></button>
+                                                    <button onClick={() => {
+                                                        updateTodo(todo.id, { completed: !todo.completed });
+                                                        if (!todo.completed) createConfetti(100);
+                                                    }} className="p-2 text-green-500 rounded-full hover:bg-green-100 dark:hover:bg-green-800 transition-colors duration-200" aria-label="Mark as complete" title="Toggle Completion"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg></button>
+                                                    <button onClick={() => handleDeleteClick(todo.id)} className="p-2 text-red-500 rounded-full hover:bg-red-100 dark:hover:bg-red-800 transition-colors duration-200" aria-label="Delete task" title="Delete Task"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.13h-4.633a2.25 2.25 0 01-2.244-2.13L5.59 6.75m1.588-.354c.24-.047.48-.096.72-.146m-.72.146a.75.75 0 01-.194-.282m1.077-.282a.75.75 0 01.194.282m-1.077-.282a.75.75 0 00-1.096.398l-1.636 4.757m.657-4.757a.75.75 0 00-1.096-.398m-1.636-4.757a.75.75 0 00-.547-.197" /></svg></button>
                                                 </div>
                                             </div>
                                         </li>
@@ -720,7 +534,7 @@
 
                         {todos.length > 0 && todos.some(todo => todo.completed) && (
                             <div className="mt-6 flex justify-center">
-                                <button onClick={clearCompletedInDb} className="px-4 py-2 text-sm font-semibold rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800 transition-all duration-200">Clear Completed Tasks</button>
+                                <button onClick={clearCompleted} className="px-4 py-2 text-sm font-semibold rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-800 transition-all duration-200" title="Clear All Completed Tasks">Clear Completed Tasks</button>
                             </div>
                         )}
                     </>
@@ -738,9 +552,9 @@
                             <>
                                 <ul className="space-y-4">
                                     {completedTasks.map(todo => (
-                                        <li key={todo.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl shadow-sm">
+                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm ${theme === 'dark' ? 'bg-gray-700 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
                                             <p className="line-through text-gray-500 dark:text-gray-400">{todo.text}</p>
-                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Completed on {new Date(todo.id).toLocaleDateString()}</p>
+                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Completed on {new Date(todo.createdAt).toLocaleDateString()}</p>
                                         </li>
                                     ))}
                                 </ul>
@@ -748,6 +562,164 @@
                         ) : (
                             <p className="text-center text-gray-500 italic">No completed tasks in history.</p>
                         )}
+                    </div>
+                );
+            };
+
+            // Drawing App Component
+            const DrawingApp = () => {
+                const canvasRef = useRef(null);
+                const [isDrawing, setIsDrawing] = useState(false);
+                const [brushColor, setBrushColor] = useState('#000000');
+                const [brushSize, setBrushSize] = useState(5);
+                const lastPos = useRef({ x: 0, y: 0 });
+
+                useEffect(() => {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeStyle = brushColor;
+                    ctx.lineWidth = brushSize;
+                }, [brushColor, brushSize]);
+
+                const startDrawing = (e) => {
+                    setIsDrawing(true);
+                    const { offsetX, offsetY } = e.nativeEvent;
+                    lastPos.current = { x: offsetX, y: offsetY };
+                };
+
+                const draw = (e) => {
+                    if (!isDrawing) return;
+                    const canvas = canvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const { offsetX, offsetY } = e.nativeEvent;
+                    ctx.beginPath();
+                    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+                    ctx.lineTo(offsetX, offsetY);
+                    ctx.stroke();
+                    lastPos.current = { x: offsetX, y: offsetY };
+                };
+
+                const stopDrawing = () => {
+                    setIsDrawing(false);
+                };
+                
+                const clearCanvas = () => {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+
+                return (
+                    <div className="space-y-4">
+                        <h2 className="text-3xl font-bold text-center">Drawing App</h2>
+                        <div className="flex justify-center space-x-2">
+                            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} title="Change brush color" />
+                            <input type="range" min="1" max="20" value={brushSize} onChange={(e) => setBrushSize(e.target.value)} title="Change brush size" />
+                            <button onClick={clearCanvas} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors" title="Clear Canvas">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.13h-4.633a2.25 2.25 0 01-2.244-2.13L5.59 6.75m1.588-.354c.24-.047.48-.096.72-.146m-.72.146a.75.75 0 01-.194-.282m1.077-.282a.75.75 0 01.194.282m-1.077-.282a.75.75 0 00-1.096.398l-1.636 4.757m.657-4.757a.75.75 0 00-1.096-.398m-1.636-4.757a.75.75 0 00-.547-.197" /></svg>
+                            </button>
+                        </div>
+                        <canvas ref={canvasRef} width="400" height="400" className="w-full h-80 sm:h-96 border rounded-xl shadow-md cursor-crosshair bg-white" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}></canvas>
+                    </div>
+                );
+            };
+
+            // Unit Converter Component
+            const ConverterApp = () => {
+                const [inputValue, setInputValue] = useState('');
+                const [inputUnit, setInputUnit] = useState('meters');
+                const [outputUnit, setOutputUnit] = useState('feet');
+                const [outputValue, setOutputValue] = useState('');
+
+                const units = {
+                    length: ['meters', 'feet', 'inches'],
+                    weight: ['kg', 'pounds', 'grams'],
+                    temperature: ['celsius', 'fahrenheit', 'kelvin']
+                };
+
+                const convert = (value, fromUnit, toUnit) => {
+                    const conversions = {
+                        'meters-feet': (val) => val * 3.28084,
+                        'meters-inches': (val) => val * 39.3701,
+                        'feet-meters': (val) => val / 3.28084,
+                        'feet-inches': (val) => val * 12,
+                        'inches-meters': (val) => val / 39.3701,
+                        'inches-feet': (val) => val / 12,
+
+                        'kg-pounds': (val) => val * 2.20462,
+                        'kg-grams': (val) => val * 1000,
+                        'pounds-kg': (val) => val / 2.20462,
+                        'pounds-grams': (val) => val * 453.592,
+                        'grams-kg': (val) => val / 1000,
+                        'grams-pounds': (val) => val / 453.592,
+
+                        'celsius-fahrenheit': (val) => (val * 9/5) + 32,
+                        'celsius-kelvin': (val) => val + 273.15,
+                        'fahrenheit-celsius': (val) => (val - 32) * 5/9,
+                        'fahrenheit-kelvin': (val) => (val - 32) * 5/9 + 273.15,
+                        'kelvin-celsius': (val) => val - 273.15,
+                        'kelvin-fahrenheit': (val) => (val - 273.15) * 9/5 + 32
+                    };
+                    return conversions[`${fromUnit}-${toUnit}`]?.(value) || value;
+                };
+
+                useEffect(() => {
+                    const floatValue = parseFloat(inputValue);
+                    if (!isNaN(floatValue)) {
+                        setOutputValue(convert(floatValue, inputUnit, outputUnit).toFixed(2));
+                    } else {
+                        setOutputValue('');
+                    }
+                }, [inputValue, inputUnit, outputUnit]);
+
+                const handleInputChange = (e) => {
+                    setInputValue(e.target.value);
+                };
+
+                const getUnitType = (unit) => {
+                    for (const type in units) {
+                        if (units[type].includes(unit)) {
+                            return type;
+                        }
+                    }
+                    return 'length';
+                };
+
+                const handleUnitChange = (unit, type) => {
+                    const currentType = getUnitType(inputUnit);
+                    if (currentType !== getUnitType(unit)) {
+                        setInputUnit(unit);
+                        setOutputUnit(units[getUnitType(unit)][1]);
+                    } else {
+                        setInputUnit(unit);
+                    }
+                };
+
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-center">Unit Converter</h2>
+                        <div className="space-y-4">
+                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                <label className="block text-sm font-semibold mb-2">Input</label>
+                                <input type="number" value={inputValue} onChange={handleInputChange} className="w-full p-2 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" placeholder="Enter value" />
+                                <div className="mt-2 flex justify-between space-x-2">
+                                    {units[getUnitType(inputUnit)].map(unit => (
+                                        <button key={unit} onClick={() => setInputUnit(unit)} className={`px-3 py-1 text-sm rounded-full ${inputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                <label className="block text-sm font-semibold mb-2">Output</label>
+                                <input type="text" value={outputValue} readOnly className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200" />
+                                <div className="mt-2 flex justify-between space-x-2">
+                                    {units[getUnitType(inputUnit)].map(unit => (
+                                        <button key={unit} onClick={() => setOutputUnit(unit)} className={`px-3 py-1 text-sm rounded-full ${outputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             };
