@@ -55,6 +55,17 @@
             0%, 100% { opacity: 0; }
             10%, 90% { opacity: 1; }
         }
+        .text-default { color: #374151; }
+        .bg-default { background-color: #f3f4f6; }
+        .text-dark { color: #e5e7eb; }
+        .bg-dark { background-color: #1f2937; }
+        .text-grey { color: #e5e7eb; }
+        .bg-grey { background-color: #3f3f46; }
+        
+        @media (prefers-color-scheme: dark) {
+            body:not(.light-mode) .text-default { color: #e5e7eb; }
+            body:not(.light-mode) .bg-default { background-color: #1f2937; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 transition-colors duration-300">
@@ -75,6 +86,7 @@
                 const [showConfirm, setShowConfirm] = useState(false);
                 const [todoToDelete, setTodoToDelete] = useState(null);
                 const [showMenu, setShowMenu] = useState(false);
+                const [notes, setNotes] = useState([]);
 
                 const showAlert = (message) => {
                     setAlertMessage(message);
@@ -102,6 +114,16 @@
                     localStorage.setItem('todos', JSON.stringify(todos));
                 }, [todos]);
 
+                // Notes App localStorage
+                useEffect(() => {
+                    const storedNotes = JSON.parse(localStorage.getItem('notes') || '[]');
+                    setNotes(storedNotes);
+                }, []);
+                
+                useEffect(() => {
+                    localStorage.setItem('notes', JSON.stringify(notes));
+                }, [notes]);
+
                 const addTodo = (e, newTodo, newPriority, newDueDate) => {
                     e.preventDefault();
                     if (newTodo.trim() === '') return;
@@ -111,7 +133,8 @@
                         completed: false,
                         priority: newPriority,
                         dueDate: newDueDate,
-                        createdAt: Date.now()
+                        createdAt: Date.now(),
+                        subtasks: []
                     };
                     setTodos(prevTodos => [...prevTodos, newTodoItem]);
                     showAlert("Task added successfully!");
@@ -173,6 +196,54 @@
                     setShowConfirm(false);
                     setTodoToDelete(null);
                 };
+                
+                // Drag and Drop
+                const handleDragStart = (e, id) => {
+                    e.dataTransfer.setData("todoId", id);
+                };
+                
+                const handleDragOver = (e) => {
+                    e.preventDefault();
+                };
+                
+                const handleDrop = (e, dropId) => {
+                    const dragId = e.dataTransfer.getData("todoId");
+                    const dragIndex = todos.findIndex(todo => todo.id === dragId);
+                    const dropIndex = todos.findIndex(todo => todo.id === dropId);
+                    
+                    const newTodos = [...todos];
+                    const [draggedTodo] = newTodos.splice(dragIndex, 1);
+                    newTodos.splice(dropIndex, 0, draggedTodo);
+                    
+                    setTodos(newTodos);
+                };
+
+                // Keyboard Shortcuts
+                useEffect(() => {
+                    const handleKeyDown = (e) => {
+                        // Only trigger if Ctrl is pressed
+                        if (e.ctrlKey) {
+                            if (e.key === 'd') {
+                                e.preventDefault();
+                                setCurrentPage('dashboard');
+                            } else if (e.key === 'h') {
+                                e.preventDefault();
+                                setCurrentPage('history');
+                            }
+                        }
+                    };
+                    window.addEventListener('keydown', handleKeyDown);
+                    return () => window.removeEventListener('keydown', handleKeyDown);
+                }, []);
+                
+                const handleAddNote = (newNote) => {
+                    const newNoteItem = { id: Date.now().toString(), text: newNote };
+                    setNotes(prevNotes => [newNoteItem, ...prevNotes]);
+                };
+                
+                const handleDeleteNote = (id) => {
+                    setNotes(prevNotes => prevNotes.filter(note => note.id !== id));
+                };
 
                 return (
                     <div className="min-h-screen transition-colors duration-300 p-4 sm:p-6 font-inter relative">
@@ -180,7 +251,7 @@
                         <div ref={confettiContainerRef} className="confetti-container"></div>
                         <div className={`max-w-xl mx-auto p-6 sm:p-8 rounded-2xl shadow-xl transition-colors duration-300 ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : theme === 'grey' ? 'bg-zinc-800 text-gray-200' : 'bg-white text-gray-800'}`}>
                             <header className="mb-6 flex justify-between items-center relative">
-                                <h1 className="text-4xl font-bold text-center">App Bundle</h1>
+                                <h1 className="text-4xl font-bold text-center">Omni-App</h1>
                                 <div className="flex space-x-2">
                                     <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200" aria-label="Open menu" title="Open Menu">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
@@ -190,19 +261,21 @@
                                     </button>
                                 </div>
                                 {showMenu && (
-                                    <div className="absolute right-0 top-12 w-48 bg-white dark:bg-gray-700 rounded-lg shadow-xl z-20 transition-all duration-200">
-                                        <button onClick={() => { setCurrentPage('list'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors rounded-t-lg">To-Do App</button>
-                                        <button onClick={() => { setCurrentPage('drawing'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Drawing App</button>
-                                        <button onClick={() => { setCurrentPage('converter'); setShowMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors rounded-b-lg">Unit Converter</button>
+                                    <div className={`absolute right-0 top-12 w-48 rounded-lg shadow-xl z-20 transition-all duration-200 ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : theme === 'grey' ? 'bg-zinc-800 text-gray-200' : 'bg-white text-gray-800'}`}>
+                                        <button onClick={() => { setCurrentPage('list'); setShowMenu(false); }} className={`w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors rounded-t-lg ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>To-Do App</button>
+                                        <button onClick={() => { setCurrentPage('notes'); setShowMenu(false); }} className={`w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Notes App</button>
+                                        <button onClick={() => { setCurrentPage('drawing'); setShowMenu(false); }} className={`w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Drawing App</button>
+                                        <button onClick={() => { setCurrentPage('converter'); setShowMenu(false); }} className={`w-full px-4 py-2 text-left hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors rounded-b-lg ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Unit Converter</button>
                                     </div>
                                 )}
                             </header>
 
-                            {currentPage === 'list' && <TaskListPage todos={todos} createConfetti={createConfetti} addTodo={addTodo} updateTodo={updateTodo} clearCompleted={clearCompleted} handleDeleteClick={handleDeleteClick} setCurrentPage={setCurrentPage} />}
-                            {currentPage === 'dashboard' && <DashboardPage todos={todos} />}
-                            {currentPage === 'history' && <HistoryPage todos={todos} />}
-                            {currentPage === 'drawing' && <DrawingApp />}
-                            {currentPage === 'converter' && <ConverterApp />}
+                            {currentPage === 'list' && <TaskListPage todos={todos} createConfetti={createConfetti} addTodo={addTodo} updateTodo={updateTodo} clearCompleted={clearCompleted} handleDeleteClick={handleDeleteClick} setCurrentPage={setCurrentPage} theme={theme} handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} />}
+                            {currentPage === 'dashboard' && <DashboardPage todos={todos} theme={theme} />}
+                            {currentPage === 'history' && <HistoryPage todos={todos} theme={theme} />}
+                            {currentPage === 'notes' && <NotesApp notes={notes} handleAddNote={handleAddNote} handleDeleteNote={handleDeleteNote} theme={theme} />}
+                            {currentPage === 'drawing' && <DrawingApp theme={theme} />}
+                            {currentPage === 'converter' && <ConverterApp theme={theme} />}
                             <ConfirmationModal showConfirm={showConfirm} cancelDelete={cancelDelete} confirmDelete={confirmDelete} />
                         </div>
                     </div>
@@ -229,7 +302,7 @@
             };
             
             // Dashboard Page Component
-            const DashboardPage = ({ todos }) => {
+            const DashboardPage = ({ todos, theme }) => {
                 const totalTasks = todos.length;
                 const completedTasks = todos.filter(todo => todo.completed).length;
                 const highPriority = todos.filter(todo => todo.priority === 'High').length;
@@ -243,39 +316,39 @@
                 
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-bold text-center">Dashboard</h2>
+                        <h2 className={`text-3xl font-bold text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Dashboard</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
-                                <h3 className="text-sm sm:text-lg font-semibold">Total</h3>
-                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks}</p>
+                            <div className={`p-4 rounded-xl shadow-sm text-center ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-200'}`}>
+                                <h3 className={`text-sm sm:text-lg font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Total</h3>
+                                <p className={`text-2xl sm:text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{totalTasks}</p>
                             </div>
-                            <div className="p-4 rounded-xl bg-green-200 dark:bg-green-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
-                                <h3 className="text-sm sm:text-lg font-semibold">Completed</h3>
-                                <p className="text-2xl sm:text-3xl font-bold mt-2">{completedTasks}</p>
+                            <div className={`p-4 rounded-xl shadow-sm text-center ${theme === 'dark' ? 'bg-green-700' : theme === 'grey' ? 'bg-green-700' : 'bg-green-200'}`}>
+                                <h3 className={`text-sm sm:text-lg font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Completed</h3>
+                                <p className={`text-2xl sm:text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{completedTasks}</p>
                             </div>
-                            <div className="p-4 rounded-xl bg-yellow-200 dark:bg-yellow-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
-                                <h3 className="text-sm sm:text-lg font-semibold">Active</h3>
-                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
+                            <div className={`p-4 rounded-xl shadow-sm text-center ${theme === 'dark' ? 'bg-yellow-700' : theme === 'grey' ? 'bg-yellow-700' : 'bg-yellow-200'}`}>
+                                <h3 className={`text-sm sm:text-lg font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Active</h3>
+                                <p className={`text-2xl sm:text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{totalTasks - completedTasks}</p>
                             </div>
-                            <div className="p-4 rounded-xl bg-blue-200 dark:bg-blue-700 shadow-sm text-center text-gray-800 dark:text-gray-200">
-                                <h3 className="text-sm sm:text-lg font-semibold">Incomplete</h3>
-                                <p className="text-2xl sm:text-3xl font-bold mt-2">{totalTasks - completedTasks}</p>
+                            <div className={`p-4 rounded-xl shadow-sm text-center ${theme === 'dark' ? 'bg-blue-700' : theme === 'grey' ? 'bg-blue-700' : 'bg-blue-200'}`}>
+                                <h3 className={`text-sm sm:text-lg font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Incomplete</h3>
+                                <p className={`text-2xl sm:text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{totalTasks - completedTasks}</p>
                             </div>
                         </div>
-                        <div className="p-6 rounded-xl bg-gray-100 dark:bg-gray-700 shadow-md text-gray-800 dark:text-gray-200">
-                            <h3 className="text-2xl font-bold mb-4 text-center">Priority Breakdown</h3>
+                        <div className={`p-6 rounded-xl shadow-md ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-100'}`}>
+                            <h3 className={`text-2xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Priority Breakdown</h3>
                             <div className="flex justify-around items-end h-48 py-4">
                                 <div className="flex flex-col items-center">
                                     <div className="w-12 rounded-t-lg bg-red-500 transition-all duration-300" style={{ height: `${highPercentage}%` }}></div>
-                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">High ({highPriority})</span>
+                                    <span className={`text-xs sm:text-sm mt-2 font-medium text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>High ({highPriority})</span>
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <div className="w-12 rounded-t-lg bg-yellow-500 transition-all duration-300" style={{ height: `${mediumPercentage}%` }}></div>
-                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">Medium ({mediumPriority})</span>
+                                    <span className={`text-xs sm:text-sm mt-2 font-medium text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Medium ({mediumPriority})</span>
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <div className="w-12 rounded-t-lg bg-green-500 transition-all duration-300" style={{ height: `${lowPercentage}%` }}></div>
-                                    <span className="text-xs sm:text-sm mt-2 font-medium text-center">Low ({lowPriority})</span>
+                                    <span className={`text-xs sm:text-sm mt-2 font-medium text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Low ({lowPriority})</span>
                                 </div>
                             </div>
                         </div>
@@ -284,7 +357,7 @@
             };
             
             // Task List Page Component
-            const TaskListPage = ({ todos, createConfetti, addTodo, updateTodo, clearCompleted, handleDeleteClick, setCurrentPage }) => {
+            const TaskListPage = ({ todos, createConfetti, addTodo, updateTodo, clearCompleted, handleDeleteClick, setCurrentPage, theme, handleDragOver, handleDrop, handleDragStart }) => {
                 const [newTodo, setNewTodo] = useState('');
                 const [newPriority, setNewPriority] = useState('Medium');
                 const [newDueDate, setNewDueDate] = useState('');
@@ -296,6 +369,7 @@
                 const [isSpeaking, setIsSpeaking] = useState(false);
                 const recognitionRef = useRef(null);
                 const timerRef = useRef(null);
+                const [subtaskInput, setSubtaskInput] = useState({});
 
                 useEffect(() => {
                     if (isRunning) {
@@ -417,19 +491,41 @@
                 };
                 
                 const handleAdd = (e) => {
+                    e.preventDefault(); // This fixes the form submission issue
                     addTodo(e, newTodo, newPriority, newDueDate);
                     setNewTodo('');
                     setNewDueDate('');
-                }
+                };
+
+                const handleAddSubtask = (todoId) => {
+                    const text = subtaskInput[todoId]?.trim();
+                    if (!text) return;
+                    updateTodo(todoId, {
+                        subtasks: [...todos.find(t => t.id === todoId).subtasks, { id: Date.now(), text, completed: false }]
+                    });
+                    setSubtaskInput(prev => ({ ...prev, [todoId]: '' }));
+                };
+
+                const toggleSubtask = (todoId, subtaskId) => {
+                    const todo = todos.find(t => t.id === todoId);
+                    const updatedSubtasks = todo.subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
+                    updateTodo(todoId, { subtasks: updatedSubtasks });
+                };
+
+                const getSubtaskProgress = (subtasks) => {
+                    if (subtasks.length === 0) return 0;
+                    const completed = subtasks.filter(st => st.completed).length;
+                    return (completed / subtasks.length) * 100;
+                };
 
                 return (
                     <>
                         <div className="flex justify-center sm:justify-between items-center mb-6 space-x-2">
-                            <button onClick={() => setCurrentPage('dashboard')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View Dashboard">
+                            <button onClick={() => setCurrentPage('dashboard')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View Dashboard (d)">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5l5.25 5.25m5.25-5.25L21 9m-13.5 0l5.25 5.25m-5.25 5.25L21 15" /></svg>
                                 <span className="hidden sm:inline">Dashboard</span>
                             </button>
-                            <button onClick={() => setCurrentPage('history')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View History">
+                            <button onClick={() => setCurrentPage('history')} className="p-2 rounded-full hidden sm:flex items-center space-x-2 hover:bg-gray-200 dark:hover:bg-gray-700" title="View History (h)">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 <span className="hidden sm:inline">History</span>
                             </button>
@@ -448,7 +544,7 @@
                         </div>
 
                         <div className="text-center mb-6">
-                            <div className="text-4xl font-mono">{formatTime(pomodoroTime)}</div>
+                            <div className={`text-4xl font-mono ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>{formatTime(pomodoroTime)}</div>
                             <div className="mt-2 space-x-2">
                                 <button onClick={isRunning ? stopPomodoro : startPomodoro} className="px-4 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={isRunning ? 'Pause Timer' : 'Start Timer'}>{isRunning ? 'Pause' : 'Start'}</button>
                                 <button onClick={resetPomodoro} className="px-4 py-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors" title="Reset Timer">Reset</button>
@@ -459,7 +555,7 @@
                             <div className="flex items-center space-x-2">
                                 <input
                                     type="text"
-                                    className="flex-grow p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200"
+                                    className={`flex-grow p-3 rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600 text-gray-200' : 'bg-white border-gray-300 text-gray-800'}`}
                                     placeholder="Add a new task..."
                                     value={newTodo}
                                     onChange={(e) => setNewTodo(e.target.value)}
@@ -478,12 +574,12 @@
                                 </button>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200">
+                                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} className={`p-3 rounded-xl border transition-all duration-200 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-gray-300'}`}>
                                     <option value="High">High Priority</option>
                                     <option value="Medium">Medium Priority</option>
                                     <option value="Low">Low Priority</option>
                                 </select>
-                                <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className="p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200" />
+                                <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className={`p-3 rounded-xl border transition-all duration-200 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-gray-300'}`} />
                             </div>
                         </form>
 
@@ -494,8 +590,8 @@
                                 ))}
                             </div>
                             <div className="flex items-center space-x-2">
-                                <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Sort By:</span>
-                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200">
+                                <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-400' : theme === 'grey' ? 'text-gray-400' : 'text-gray-600'}`}>Sort By:</span>
+                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`px-3 py-2 rounded-xl border-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-gray-800 dark:text-gray-200 ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-200'}`}>
                                     <option value="dueDate">Due Date</option>
                                     <option value="priority">Priority</option>
                                     <option value="creationDate">Creation Date</option>
@@ -503,16 +599,16 @@
                             </div>
                         </div>
 
-                        <input type="text" className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 mb-6 text-gray-800 dark:text-gray-200" placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <input type="text" className={`w-full p-3 rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600 text-gray-200' : 'bg-white border-gray-300 text-gray-800'}`} placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         
                         <ul className="space-y-4">
-                            {todos.length === 0 ? (<p className="text-center text-gray-500 italic">No tasks yet. Add one above!</p>) : (
-                                filteredTodos.length === 0 ? (<p className="text-center text-gray-500 italic">No tasks match your criteria.</p>) : (
+                            {todos.length === 0 ? (<p className={`text-center italic ${theme === 'default' ? 'text-gray-500' : 'text-gray-400'}`}>No tasks yet. Add one above!</p>) : (
+                                filteredTodos.length === 0 ? (<p className={`text-center italic ${theme === 'default' ? 'text-gray-500' : 'text-gray-400'}`}>No tasks match your criteria.</p>) : (
                                     filteredTodos.map(todo => (
-                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-50'}`}>
-                                            <div className="flex items-center justify-between">
+                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-50'}`} draggable onDragStart={(e) => handleDragStart(e, todo.id)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, todo.id)}>
+                                            <div className="flex items-start justify-between">
                                                 <div className="flex-grow flex flex-col space-y-1">
-                                                    <div className={`text-lg font-medium break-words transition-colors ${todo.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{todo.text}</div>
+                                                    <div className={`text-lg font-medium break-words transition-colors ${todo.completed ? 'line-through text-gray-400 dark:text-gray-500' : theme === 'default' ? 'text-gray-700' : 'text-gray-200'}`}>{todo.text}</div>
                                                     <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
                                                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold text-white ${todo.priority === 'High' ? 'bg-red-500' : todo.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`}>{todo.priority}</span>
                                                         {todo.dueDate && (<span className={`text-xs ${new Date(todo.dueDate) < new Date() && !todo.completed ? 'text-red-500 font-bold' : ''}`}>Due: {todo.dueDate}</span>)}
@@ -524,6 +620,37 @@
                                                         if (!todo.completed) createConfetti(100);
                                                     }} className="p-2 text-green-500 rounded-full hover:bg-green-100 dark:hover:bg-green-800 transition-colors duration-200" aria-label="Mark as complete" title="Toggle Completion"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg></button>
                                                     <button onClick={() => handleDeleteClick(todo.id)} className="p-2 text-red-500 rounded-full hover:bg-red-100 dark:hover:bg-red-800 transition-colors duration-200" aria-label="Delete task" title="Delete Task"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.13h-4.633a2.25 2.25 0 01-2.244-2.13L5.59 6.75m1.588-.354c.24-.047.48-.096.72-.146m-.72.146a.75.75 0 01-.194-.282m1.077-.282a.75.75 0 01.194.282m-1.077-.282a.75.75 0 00-1.096.398l-1.636 4.757m.657-4.757a.75.75 0 00-1.096-.398m-1.636-4.757a.75.75 0 00-.547-.197" /></svg></button>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2">
+                                                {todo.subtasks && todo.subtasks.length > 0 && (
+                                                    <>
+                                                        <div className={`w-full bg-gray-300 dark:bg-gray-600 rounded-full h-2.5 mt-2`}>
+                                                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${getSubtaskProgress(todo.subtasks)}%` }}></div>
+                                                        </div>
+                                                        <ul className="mt-2 space-y-1 pl-4">
+                                                            {todo.subtasks.map(subtask => (
+                                                                <li key={subtask.id} onClick={() => toggleSubtask(todo.id, subtask.id)} className={`cursor-pointer ${subtask.completed ? 'line-through text-gray-500' : theme === 'default' ? 'text-gray-600' : 'text-gray-300'}`}>
+                                                                    <span className="mr-2">{subtask.completed ? '✅' : '⬜'}</span>{subtask.text}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </>
+                                                )}
+                                                <div className="flex mt-2">
+                                                    <input 
+                                                        type="text" 
+                                                        className={`w-full p-2 text-sm rounded-lg border transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600 text-gray-200' : 'bg-white border-gray-300 text-gray-800'}`}
+                                                        placeholder="Add subtask..."
+                                                        value={subtaskInput[todo.id] || ''}
+                                                        onChange={(e) => setSubtaskInput(prev => ({ ...prev, [todo.id]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if(e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                handleAddSubtask(todo.id);
+                                                            }
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
                                         </li>
@@ -542,37 +669,91 @@
             };
             
             // History Page Component
-            const HistoryPage = ({ todos }) => {
+            const HistoryPage = ({ todos, theme }) => {
                 const completedTasks = todos.filter(t => t.completed).sort((a,b) => b.createdAt - a.createdAt);
                 
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-bold text-center">Task History</h2>
+                        <h2 className={`text-3xl font-bold text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Task History</h2>
                         {completedTasks.length > 0 ? (
                             <>
                                 <ul className="space-y-4">
                                     {completedTasks.map(todo => (
-                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm ${theme === 'dark' ? 'bg-gray-700 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
-                                            <p className="line-through text-gray-500 dark:text-gray-400">{todo.text}</p>
-                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Completed on {new Date(todo.createdAt).toLocaleDateString()}</p>
+                                        <li key={todo.id} className={`p-4 rounded-xl shadow-sm ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-50'}`}>
+                                            <p className={`line-through ${theme === 'default' ? 'text-gray-500' : 'text-gray-400'}`}>{todo.text}</p>
+                                            <p className={`text-sm ${theme === 'default' ? 'text-gray-400' : 'text-gray-500'} mt-1`}>Completed on {new Date(todo.createdAt).toLocaleDateString()}</p>
                                         </li>
                                     ))}
                                 </ul>
                             </>
                         ) : (
-                            <p className="text-center text-gray-500 italic">No completed tasks in history.</p>
+                            <p className="text-center italic text-gray-500 dark:text-gray-400">No completed tasks in history.</p>
                         )}
+                    </div>
+                );
+            };
+            
+            // Notes App Component
+            const NotesApp = ({ notes, handleAddNote, handleDeleteNote, theme }) => {
+                const [newNote, setNewNote] = useState('');
+                
+                const handleAdd = () => {
+                    if (newNote.trim()) {
+                        handleAddNote(newNote);
+                        setNewNote('');
+                    }
+                };
+
+                return (
+                    <div className="space-y-6">
+                        <h2 className={`text-3xl font-bold text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Notes App</h2>
+                        <div className="flex space-x-2">
+                            <input 
+                                type="text"
+                                className={`flex-grow p-3 rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : theme === 'grey' ? 'bg-zinc-700 border-zinc-600 text-gray-200' : 'bg-white border-gray-300 text-gray-800'}`}
+                                placeholder="Add a new note..."
+                                value={newNote}
+                                onChange={(e) => setNewNote(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if(e.key === 'Enter') {
+                                        handleAdd();
+                                    }
+                                }}
+                            />
+                            <button onClick={handleAdd} className="p-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-200" title="Add Note">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            </button>
+                        </div>
+                        <ul className="space-y-4">
+                            {notes.length === 0 ? (
+                                <p className="text-center italic text-gray-500 dark:text-gray-400">No notes yet. Add one above!</p>
+                            ) : (
+                                notes.map(note => (
+                                    <li key={note.id} className={`p-4 rounded-xl shadow-sm ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-50'}`}>
+                                        <div className="flex justify-between items-start">
+                                            <span className={`flex-grow ${theme === 'default' ? 'text-gray-700' : 'text-gray-200'}`}>{note.text}</span>
+                                            <button onClick={() => handleDeleteNote(note.id)} className="p-1 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-800 transition-colors" title="Delete Note">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                    </li>
+                                ))
+                            )}
+                        </ul>
                     </div>
                 );
             };
 
             // Drawing App Component
-            const DrawingApp = () => {
+            const DrawingApp = ({ theme }) => {
                 const canvasRef = useRef(null);
                 const [isDrawing, setIsDrawing] = useState(false);
                 const [brushColor, setBrushColor] = useState('#000000');
                 const [brushSize, setBrushSize] = useState(5);
                 const lastPos = useRef({ x: 0, y: 0 });
+                const history = useRef([]);
+                const historyStep = useRef(0);
+                const isDarkMode = theme === 'dark' || theme === 'grey';
 
                 useEffect(() => {
                     const canvas = canvasRef.current;
@@ -603,40 +784,97 @@
 
                 const stopDrawing = () => {
                     setIsDrawing(false);
+                    const canvas = canvasRef.current;
+                    const dataURL = canvas.toDataURL();
+                    history.current = history.current.slice(0, historyStep.current + 1);
+                    history.current.push(dataURL);
+                    historyStep.current++;
                 };
                 
                 const clearCanvas = () => {
                     const canvas = canvasRef.current;
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
+                    history.current = [];
+                    historyStep.current = 0;
+                };
+
+                const undo = () => {
+                    if (historyStep.current > 0) {
+                        historyStep.current--;
+                        const canvas = canvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const canvasState = new Image();
+                        canvasState.src = history.current[historyStep.current];
+                        canvasState.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(canvasState, 0, 0);
+                        };
+                    }
+                };
+                
+                const redo = () => {
+                    if (historyStep.current < history.current.length - 1) {
+                        historyStep.current++;
+                        const canvas = canvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        const canvasState = new Image();
+                        canvasState.src = history.current[historyStep.current];
+                        canvasState.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(canvasState, 0, 0);
+                        };
+                    }
+                };
+
+                const downloadCanvas = () => {
+                    const canvas = canvasRef.current;
+                    const image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+                    const link = document.createElement('a');
+                    link.download = "drawing.png";
+                    link.href = image;
+                    link.click();
+                };
 
                 return (
                     <div className="space-y-4">
-                        <h2 className="text-3xl font-bold text-center">Drawing App</h2>
-                        <div className="flex justify-center space-x-2">
-                            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} title="Change brush color" />
-                            <input type="range" min="1" max="20" value={brushSize} onChange={(e) => setBrushSize(e.target.value)} title="Change brush size" />
+                        <h2 className={`text-3xl font-bold text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Drawing App</h2>
+                        <div className="flex justify-center flex-wrap space-x-2 space-y-2">
+                            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-12 h-12 rounded-lg" title="Change brush color" />
+                            <input type="range" min="1" max="20" value={brushSize} onChange={(e) => setBrushSize(e.target.value)} className="w-24" title="Change brush size" />
                             <button onClick={clearCanvas} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors" title="Clear Canvas">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.13h-4.633a2.25 2.25 0 01-2.244-2.13L5.59 6.75m1.588-.354c.24-.047.48-.096.72-.146m-.72.146a.75.75 0 01-.194-.282m1.077-.282a.75.75 0 01.194.282m-1.077-.282a.75.75 0 00-1.096.398l-1.636 4.757m.657-4.757a.75.75 0 00-1.096-.398m-1.636-4.757a.75.75 0 00-.547-.197" /></svg>
                             </button>
+                            <button onClick={undo} className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors" title="Undo">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM12.25 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM14.75 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM2.25 12a9.75 9.75 0 0119.5 0M9.75 12H21" /></svg>
+                            </button>
+                            <button onClick={redo} className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors" title="Redo">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M14.25 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM11.75 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM9.25 12a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5zM21.75 12a9.75 9.75 0 01-19.5 0M14.25 12H3" /></svg>
+                            </button>
+                            <button onClick={downloadCanvas} className="p-2 rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors" title="Download Image">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.25a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25V14.25m4.5-5.25l-3 3m3-3l3 3m-3-3V15M16.5 6.75v3" /></svg>
+                            </button>
                         </div>
-                        <canvas ref={canvasRef} width="400" height="400" className="w-full h-80 sm:h-96 border rounded-xl shadow-md cursor-crosshair bg-white" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}></canvas>
+                        <canvas ref={canvasRef} width="400" height="400" className={`w-full h-80 sm:h-96 border rounded-xl shadow-md cursor-crosshair ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}></canvas>
                     </div>
                 );
             };
 
             // Unit Converter Component
-            const ConverterApp = () => {
+            const ConverterApp = ({ theme }) => {
                 const [inputValue, setInputValue] = useState('');
                 const [inputUnit, setInputUnit] = useState('meters');
                 const [outputUnit, setOutputUnit] = useState('feet');
                 const [outputValue, setOutputValue] = useState('');
+                const [conversionHistory, setConversionHistory] = useState([]);
 
                 const units = {
                     length: ['meters', 'feet', 'inches'],
                     weight: ['kg', 'pounds', 'grams'],
-                    temperature: ['celsius', 'fahrenheit', 'kelvin']
+                    temperature: ['celsius', 'fahrenheit', 'kelvin'],
+                    volume: ['liters', 'gallons', 'quarts'],
+                    speed: ['km/h', 'mph', 'm/s'],
+                    data: ['bits', 'bytes', 'KB', 'MB', 'GB']
                 };
 
                 const convert = (value, fromUnit, toUnit) => {
@@ -660,7 +898,30 @@
                         'fahrenheit-celsius': (val) => (val - 32) * 5/9,
                         'fahrenheit-kelvin': (val) => (val - 32) * 5/9 + 273.15,
                         'kelvin-celsius': (val) => val - 273.15,
-                        'kelvin-fahrenheit': (val) => (val - 273.15) * 9/5 + 32
+                        'kelvin-fahrenheit': (val) => (val - 273.15) * 9/5 + 32,
+
+                        'liters-gallons': (val) => val * 0.264172,
+                        'liters-quarts': (val) => val * 1.05669,
+                        'gallons-liters': (val) => val / 0.264172,
+                        'gallons-quarts': (val) => val * 4,
+                        'quarts-liters': (val) => val / 1.05669,
+                        'quarts-gallons': (val) => val / 4,
+
+                        'km/h-mph': (val) => val * 0.621371,
+                        'km/h-m/s': (val) => val / 3.6,
+                        'mph-km/h': (val) => val / 0.621371,
+                        'mph-m/s': (val) => val * 0.44704,
+                        'm/s-km/h': (val) => val * 3.6,
+                        'm/s-mph': (val) => val / 0.44704,
+
+                        'bits-bytes': (val) => val / 8,
+                        'bits-KB': (val) => val / 8 / 1024,
+                        'bytes-bits': (val) => val * 8,
+                        'bytes-KB': (val) => val / 1024,
+                        'KB-bytes': (val) => val * 1024,
+                        'KB-MB': (val) => val / 1024,
+                        'MB-GB': (val) => val / 1024,
+                        'GB-MB': (val) => val * 1024
                     };
                     return conversions[`${fromUnit}-${toUnit}`]?.(value) || value;
                 };
@@ -668,7 +929,9 @@
                 useEffect(() => {
                     const floatValue = parseFloat(inputValue);
                     if (!isNaN(floatValue)) {
-                        setOutputValue(convert(floatValue, inputUnit, outputUnit).toFixed(2));
+                        const convertedValue = convert(floatValue, inputUnit, outputUnit);
+                        setOutputValue(convertedValue.toFixed(2));
+                        setConversionHistory(prev => [{ input: `${floatValue} ${inputUnit}`, output: `${convertedValue.toFixed(2)} ${outputUnit}` }, ...prev.slice(0, 4)]);
                     } else {
                         setOutputValue('');
                     }
@@ -687,38 +950,52 @@
                     return 'length';
                 };
 
-                const handleUnitChange = (unit, type) => {
+                const handleUnitChange = (unit, isInput) => {
                     const currentType = getUnitType(inputUnit);
-                    if (currentType !== getUnitType(unit)) {
+                    const newType = getUnitType(unit);
+                    if (isInput) {
                         setInputUnit(unit);
-                        setOutputUnit(units[getUnitType(unit)][1]);
+                        if (currentType !== newType) {
+                            setOutputUnit(units[newType][1]);
+                        }
                     } else {
-                        setInputUnit(unit);
+                        setOutputUnit(unit);
                     }
                 };
 
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-bold text-center">Unit Converter</h2>
+                        <h2 className={`text-3xl font-bold text-center ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Unit Converter</h2>
                         <div className="space-y-4">
-                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                                <label className="block text-sm font-semibold mb-2">Input</label>
-                                <input type="number" value={inputValue} onChange={handleInputChange} className="w-full p-2 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" placeholder="Enter value" />
-                                <div className="mt-2 flex justify-between space-x-2">
+                            <div className={`p-4 rounded-xl ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-200'}`}>
+                                <label className={`block text-sm font-semibold mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Input</label>
+                                <input type="number" value={inputValue} onChange={handleInputChange} className={`w-full p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : theme === 'grey' ? 'bg-zinc-800 text-gray-200' : 'bg-white text-gray-800'}`} placeholder="Enter value" />
+                                <div className="mt-2 flex justify-between space-x-2 flex-wrap">
                                     {units[getUnitType(inputUnit)].map(unit => (
-                                        <button key={unit} onClick={() => setInputUnit(unit)} className={`px-3 py-1 text-sm rounded-full ${inputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
+                                        <button key={unit} onClick={() => handleUnitChange(unit, true)} className={`px-3 py-1 text-sm rounded-full ${inputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
                                     ))}
                                 </div>
                             </div>
-                            <div className="p-4 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                                <label className="block text-sm font-semibold mb-2">Output</label>
-                                <input type="text" value={outputValue} readOnly className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200" />
-                                <div className="mt-2 flex justify-between space-x-2">
+                            <div className={`p-4 rounded-xl ${theme === 'dark' ? 'bg-gray-700' : theme === 'grey' ? 'bg-zinc-700' : 'bg-gray-200'}`}>
+                                <label className={`block text-sm font-semibold mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Output</label>
+                                <input type="text" value={outputValue} readOnly className={`w-full p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : theme === 'grey' ? 'bg-zinc-800 text-gray-200' : 'bg-gray-100 text-gray-800'}`} />
+                                <div className="mt-2 flex justify-between space-x-2 flex-wrap">
                                     {units[getUnitType(inputUnit)].map(unit => (
-                                        <button key={unit} onClick={() => setOutputUnit(unit)} className={`px-3 py-1 text-sm rounded-full ${outputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
+                                        <button key={unit} onClick={() => handleUnitChange(unit, false)} className={`px-3 py-1 text-sm rounded-full ${outputUnit === unit ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}>{unit}</button>
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                        <div className="mt-6">
+                            <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-gray-200' : theme === 'grey' ? 'text-gray-200' : 'text-gray-800'}`}>Conversion History</h3>
+                            <ul className="space-y-2">
+                                {conversionHistory.map((item, index) => (
+                                    <li key={index} className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : theme === 'grey' ? 'bg-zinc-800' : 'bg-white'}`}>
+                                        <span className={`text-sm ${theme === 'default' ? 'text-gray-600' : 'text-gray-300'}`}>{item.input}</span>
+                                        <span className={`text-sm font-semibold ${theme === 'default' ? 'text-gray-800' : 'text-gray-200'}`}> &rarr; {item.output}</span>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
                 );
